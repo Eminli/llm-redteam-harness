@@ -1,2 +1,6 @@
-pyrit
-python-dotenv
+agentdojo[transformers]
+# Analysis
+numpy
+pandas
+statsmodels   # Wilson CIs, McNemar's test
+tabulate

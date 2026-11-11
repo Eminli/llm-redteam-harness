@@ -1,88 +1,61 @@
-# llm-redteam-harness
+# Indirect prompt injection & defense transfer on small open-weight agents
 
-A small, reproducible harness for red-teaming large language models with
-[Microsoft PyRIT](https://github.com/microsoft/PyRIT). It runs single-turn and
-multi-turn attacks, converter chains, and indirect prompt injection against a
-**local, self-hosted model**, and scores the results automatically so findings
-are reproducible rather than judged by eye.
+A small, pre-registered red-team study: does indirect prompt injection succeed against
+7-8B open-weight models driving a tool-using agent, and do AgentDojo's defenses reduce it
+in the same rank order they do for frontier models? Built on
+[AgentDojo](https://github.com/ethz-spylab/agentdojo); success is a **deterministic
+sandbox oracle**, not an LLM judge.
 
-Built to exercise the techniques that matter for AI red teaming — prompt
-injection, converter-based input obfuscation, multi-turn escalation, and
-agent/tool trust boundaries — and to turn each finding into a defender takeaway.
+Design and success criteria are frozen up front in **[PREREGISTRATION.md](PREREGISTRATION.md)**.
 
-## Threat model
+## Why it's credible
+- One falsifiable question, committed before running (no cherry-picking).
+- Deterministic ground truth (sandbox state), so no judge-reliability caveat.
+- Calibrated against a published AgentDojo number before any new number is trusted.
+- Wilson CIs on every rate; McNemar's paired test for each defense delta.
 
-Each run is framed with the ontology Microsoft's AI Red Team uses:
-
-- **Actor** — who is attacking (external user, a poisoned document, a tool response)
-- **TTPs** — the technique (injection, obfuscation, multi-turn escalation)
-- **Weakness** — what it exploits (no data/instruction separation, pre-decode filtering)
-- **Impact** — what it achieves (instruction override, refusal bypass)
-
-## Scope and safety
-
-- Everything targets a **local model you run yourself** (Ollama / LM Studio). No
-  third-party product or hosted API is attacked.
-- Objectives are **benign canaries** (e.g. "append a fixed token"), chosen to
-  measure whether a control holds, not to elicit harmful content.
-- Each finding ends in a mitigation. This is security engineering for defenders.
+## Requirements (runs on your machine, not in CI)
+- macOS/Linux host with ~16 GB+ RAM (models run one at a time).
+- [Ollama](https://ollama.com) for local inference.
+- Python 3.10+.
 
 ## Setup
-
-Requires Python 3.10-3.13.
-
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env    # then edit to point at your local model
+cd llm-redteam-harness
+bash scripts/setup.sh          # venv, deps, pull the 3 models
+cp .env.example .env           # already points at local Ollama
 ```
 
-Start a local model, e.g. with Ollama:
-
+## Smoke test first (confirms the Ollama tool-calling wiring)
 ```bash
-ollama pull llama3.2
-# OpenAI-compatible endpoint: http://localhost:11434/v1/chat/completions
+source .venv/bin/activate && set -a && . ./.env && set +a
+bash scripts/smoke_test.sh     # 1 user task x 1 injection task on banking
+```
+It prints the run-log tree and one result JSON. If the agent never calls tools, your model's
+native tool-calling over Ollama is weak: switch provider to `local` with `--tool-delimiter`
+(see the note in `scripts/run_study.sh`) and re-smoke.
+
+## Run the study
+```bash
+source .venv/bin/activate && set -a && . ./.env && set +a
+bash scripts/run_study.sh      # benign + attack + 2 defenses, 3 models, banking
+```
+Resumable: AgentDojo skips tasks already logged. Add `workspace` (stretch) by editing
+`SUITES` in the script. Full `banking` set across all cells is a few hours on a Mac.
+
+## Analyze
+After runs finish, `scripts/analyze.py` reads `runs/` and emits the ASR table with Wilson
+CIs, the McNemar defense deltas, and the calibration row into `findings/`. (Written against
+the real result schema once the smoke test produces one.)
+
+## Optional calibration (pre-reg Section 9)
+Reproduce the published gpt-4o number to validate the harness (needs `OPENAI_API_KEY`):
+```bash
+python -m agentdojo.scripts.benchmark --model gpt-4o-2024-05-13 \
+  --suite banking --attack important_instructions --logdir runs/_calibration
 ```
 
-## Run
-
-```bash
-python harness/single_turn.py      # baseline: target reachable, scoring works
-python harness/converters.py       # does Base64 obfuscation change the outcome?
-python harness/indirect_inject.py  # instruction hidden in a "document"
-python harness/multi_turn.py        # Crescendo-style escalation (needs a 2nd local model)
-python harness/scoring.py          # automated refusal scoring
-```
-
-## What's inside
-
-| File | What it demonstrates |
-|------|----------------------|
-| `harness/single_turn.py` | `PromptSendingAttack` against a local target |
-| `harness/converters.py` | Converter chains (Base64) and outcome deltas |
-| `harness/multi_turn.py` | Multi-turn / Crescendo escalation with an adversarial model |
-| `harness/indirect_inject.py` | Indirect prompt injection via attacker-controlled data |
-| `harness/scoring.py` | Automated scoring (`SubStringScorer`, self-ask refusal) |
-| `findings/results.md` | Results table + defender notes |
-
-## Findings
-
-See [findings/results.md](findings/results.md). Summary of defender takeaways:
-
-- **Filter after decoding, not before.** If a Base64 (or similar) converter flips a
-  refusal into compliance, input filtering runs only on the raw string.
-- **Separate the data plane from the instruction plane.** Indirect injection
-  succeeds because the model treats document/tool content as instructions. For
-  agents, treat every tool and document result as untrusted input.
-- **Score the whole conversation, not each turn.** Multi-turn escalation defeats
-  per-turn checks; evaluate the full transcript against the objective.
-- **Red teaming is continuous.** Mitigations reduce risk but don't eliminate it;
-  rerun the harness as a regression suite after each change.
-
-## References
-
-- [PyRIT](https://github.com/microsoft/PyRIT) and [docs](https://microsoft.github.io/PyRIT/)
-- [OWASP Top 10 for LLM Applications](https://genai.owasp.org/llm-top-10/)
-- [MITRE ATLAS](https://atlas.mitre.org/)
-- Microsoft, [Lessons from Red Teaming 100 Generative AI Products](https://arxiv.org/abs/2501.07238)
-- Greshake et al., [Not what you've signed up for: indirect prompt injection](https://arxiv.org/abs/2302.12173)
+## Scope
+Sandbox + self-hosted models only; benign simulated actions, never harmful text; standard
+academic benchmark; defender-oriented; no third-party production systems. See
+PREREGISTRATION.md Section 12.

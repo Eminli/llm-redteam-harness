@@ -1,7 +1,6 @@
 .env
+.venv/
 __pycache__/
 *.pyc
-.venv/
-*.db
-*.sqlite
-results/
+# keep runs/ logs (they are the evidence), but ignore local caches
+.ipynb_checkpoints/

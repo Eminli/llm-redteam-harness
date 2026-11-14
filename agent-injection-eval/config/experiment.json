@@ -1,0 +1,9 @@
+{
+  "model": "llama3.1:8b",
+  "host": "http://localhost:11434",
+  "defenses": ["none", "prompt_level", "spotlighting"],
+  "seeds": 20,
+  "budget": 16,
+  "out_dir": "results",
+  "_note": "classifier defense is a stretch: add 'classifier' to defenses after wiring a real guard model into defenses.Classifier (see RUNBOOK step 5)."
+}

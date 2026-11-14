@@ -1,0 +1,11 @@
+# The CORE harness needs NOTHING here — it runs on Python 3.9+ stdlib and talks
+# to Ollama over urllib. These are OPTIONAL extras only:
+
+# analysis plot (analyze.py falls back to text if absent)
+matplotlib>=3.7 ; python_version >= "3.9"
+
+# stretch: drive the real AgentDojo benchmark via environment.from_agentdojo()
+# agentdojo
+
+# stretch: nicer tables in analysis
+# pandas
